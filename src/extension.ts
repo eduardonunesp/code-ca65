@@ -4,14 +4,27 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as util from 'util';
+import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 
 let taskProvider: vscode.Disposable | undefined;
 let ld65ConfigWatcher: vscode.FileSystemWatcher | undefined;
 let cl65ConfigWatcher: vscode.FileSystemWatcher | undefined;
+let languageClient: LanguageClient | undefined;
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+	const serverModule = context.asAbsolutePath(path.join('out', 'server', 'server.js'));
+	const serverOptions: ServerOptions = {
+		run: { module: serverModule, transport: TransportKind.ipc },
+		debug: { module: serverModule, transport: TransportKind.ipc, options: { execArgv: ['--nolazy', '--inspect=6009'] } },
+	};
+	const clientOptions: LanguageClientOptions = {
+		documentSelector: [{ scheme: 'file', language: 'ca65' }],
+	};
+	languageClient = new LanguageClient('ca65LanguageServer', 'ca65 Language Server', serverOptions, clientOptions);
+	languageClient.start();
+
 	let workspaceRoot = vscode.workspace.rootPath;
 	if (workspaceRoot) {
 
@@ -45,7 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {
+export function deactivate(): Thenable<void> | undefined {
 	if (cl65ConfigWatcher) {
 		cl65ConfigWatcher.dispose();
 	}
@@ -55,6 +68,10 @@ export function deactivate() {
 	if (taskProvider) {
 		taskProvider.dispose();
 	}
+	if (!languageClient) {
+		return undefined;
+	}
+	return languageClient.stop();
 }
 
 interface AssemblerTaskDefinition extends vscode.TaskDefinition {
